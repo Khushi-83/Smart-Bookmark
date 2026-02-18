@@ -13,7 +13,8 @@ type Bookmark = {
 
 export default function BookmarkList() {
     const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
-    const supabase = createClient()
+    // Create the client once and reuse it to avoid constant re-subscriptions
+    const [supabase] = useState(() => createClient())
 
     const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
