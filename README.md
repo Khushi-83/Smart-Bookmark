@@ -23,13 +23,11 @@ A real-time, secure bookmark manager built with Next.js 14, Supabase, and Tailwi
 - A Supabase project
 
 ### Installation
-
 1. Clone the repository:
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/Khushi-83/Smart-Bookmark.git
    cd smart-bookmark
    ```
-
 2. Install dependencies:
    ```bash
    npm install
@@ -63,3 +61,22 @@ This app is ready to be deployed on Vercel.
 2. Import the project in Vercel.
 3. Add the `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` environment variables in Vercel project settings.
 4. Deploy!
+
+## Challenges & Solutions
+
+### 1. Real-time Updates Consistency
+**Challenge:** Bookmarks weren't updating in real-time across devices, requiring a manual page refresh.
+**Solution:**
+- Implemented Supabase Realtime subscriptions in `BookmarkList.tsx` using the `postgres_changes` event.
+- Ensured the `bookmarks` table had "Realtime" enabled in the Supabase Dashboard.
+- Correctly handled `INSERT` and `DELETE` payloads to update the React state instantly without refetching.
+
+### 2. Row Level Security (RLS) Policies
+**Challenge:** ensuring users can only manage their own data securely.
+**Solution:**
+- Enabled RLS on the `bookmarks` table.
+- Added authenticated-only policies:
+  - `SELECT`: `auth.uid() = user_id`
+  - `INSERT`: `auth.uid() = user_id`
+  - `DELETE`: `auth.uid() = user_id`
+
