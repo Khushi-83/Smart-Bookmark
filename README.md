@@ -65,8 +65,9 @@ This app is ready to be deployed on Vercel.
 ## Challenges & Solutions
 
 ### 1. Real-time Updates Consistency
-**Challenge:** Bookmarks weren't updating in real-time across devices, requiring a manual page refresh.
+**Challenge:** Bookmarks weren't updating in real-time across devices, requiring a manual page refresh. This was particularly problematic on secondary devices where the connection would instability or updates wouldn't appear at all.
 **Solution:**
+- **Client Instantiation Fix:** Moved the `createClient` call inside a `useState` hook in `BookmarkList.tsx`. This prevents the Supabase client from being re-instantiated on every render, which was causing the Realtime connection to constantly reset and fail on some devices.
 - Implemented Supabase Realtime subscriptions in `BookmarkList.tsx` using the `postgres_changes` event.
 - Ensured the `bookmarks` table had "Realtime" enabled in the Supabase Dashboard.
 - Correctly handled `INSERT` and `DELETE` payloads to update the React state instantly without refetching.
