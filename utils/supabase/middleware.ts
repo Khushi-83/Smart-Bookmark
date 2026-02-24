@@ -31,7 +31,15 @@ export async function updateSession(request: NextRequest) {
         }
     )
 
-    await supabase.auth.getUser()
+    // Add a simple timeout to prevent middleware from hanging the whole site
+    try {
+        await Promise.race([
+            supabase.auth.getUser(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Auth Timeout')), 5000))
+        ])
+    } catch (e) {
+        console.error('Middleware Auth Timeout:', e)
+    }
 
     return response
 }
