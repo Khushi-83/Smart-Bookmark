@@ -13,13 +13,12 @@ type Bookmark = {
 
 export default function BookmarkList() {
     const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
-    // Create the client once and reuse it to avoid constant re-subscriptions
+    const [errorMsg, setErrorMsg] = useState<string | null>(null)
     const [supabase] = useState(() => createClient())
 
-    const [errorMsg, setErrorMsg] = useState<string | null>(null)
-
     useEffect(() => {
-        // Initial fetch
+        let channel: any
+
         const fetchBookmarks = async () => {
             const { data, error } = await supabase
                 .from('bookmarks')
@@ -27,45 +26,71 @@ export default function BookmarkList() {
                 .order('created_at', { ascending: false })
 
             if (error) {
-                console.error('Error fetching bookmarks:', error)
+                console.error('Fetch error:', error)
                 setErrorMsg(error.message)
-            } else {
-                setErrorMsg(null)
+                return
             }
 
-            if (data) {
-                setBookmarks(data)
-            }
+            setErrorMsg(null)
+            setBookmarks(data || [])
         }
 
-        fetchBookmarks()
+        const initRealtime = async () => {
+            // ✅ ensure user is authenticated first
+            const {
+                data: { user },
+                error: userError,
+            } = await supabase.auth.getUser()
 
-        // Real-time subscription
-        const channel = supabase
-            .channel('realtime_bookmarks')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'bookmarks'
-            }, (payload) => {
-                console.log('Realtime payload received:', payload)
-                if (payload.eventType === 'INSERT') {
-                    setBookmarks((prev) => [payload.new as Bookmark, ...prev])
-                } else if (payload.eventType === 'DELETE') {
-                    setBookmarks((prev) => prev.filter((b) => b.id !== (payload.old as Bookmark).id))
-                }
-            })
-            .subscribe((status) => {
-                console.log('Realtime subscription status:', status)
-            })
+            console.log('Authenticated user:', user)
+
+            if (userError || !user) {
+                console.error('User not authenticated → realtime blocked')
+                return
+            }
+
+            // initial fetch
+            await fetchBookmarks()
+
+            // ✅ realtime subscription WITH RLS filter
+            channel = supabase
+                .channel('realtime_bookmarks')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'bookmarks',
+                        filter: `user_id=eq.${user.id}`,
+                    },
+                    (payload) => {
+                        console.log('Realtime payload:', payload)
+
+                        // safest approach → refetch
+                        fetchBookmarks()
+                    }
+                )
+                .subscribe((status) => {
+                    console.log('Realtime status:', status)
+                })
+        }
+
+        initRealtime()
 
         return () => {
-            supabase.removeChannel(channel)
+            if (channel) supabase.removeChannel(channel)
         }
     }, [supabase])
 
     const handleDelete = async (id: number) => {
-        await supabase.from('bookmarks').delete().eq('id', id)
+        const { error } = await supabase
+            .from('bookmarks')
+            .delete()
+            .eq('id', id)
+
+        if (error) {
+            console.error('Delete error:', error)
+        }
     }
 
     if (bookmarks.length === 0) {
@@ -75,7 +100,9 @@ export default function BookmarkList() {
                     <Globe className="w-8 h-8 text-gray-600" />
                 </div>
                 <p className="text-gray-400">Your collection is empty.</p>
-                <p className="text-sm text-gray-600 mt-1">Start by adding a new bookmark above.</p>
+                <p className="text-sm text-gray-600 mt-1">
+                    Start by adding a new bookmark above.
+                </p>
             </div>
         )
     }
@@ -85,9 +112,9 @@ export default function BookmarkList() {
             {errorMsg && (
                 <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-200 text-sm">
                     <strong>Error:</strong> {errorMsg}
-                    <p className="mt-1 text-xs opacity-80">Check if RLS policies are enabled in Supabase.</p>
                 </div>
             )}
+
             {bookmarks.map((bookmark) => (
                 <div
                     key={bookmark.id}
@@ -97,6 +124,7 @@ export default function BookmarkList() {
                         <h3 className="font-medium text-gray-200 truncate group-hover:text-white transition-colors">
                             {bookmark.title}
                         </h3>
+
                         <a
                             href={bookmark.url}
                             target="_blank"
@@ -107,10 +135,10 @@ export default function BookmarkList() {
                             <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </a>
                     </div>
+
                     <button
                         onClick={() => handleDelete(bookmark.id)}
                         className="p-2 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
-                        aria-label="Delete bookmark"
                     >
                         <Trash2 className="w-4 h-4" />
                     </button>
